@@ -8,12 +8,23 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using Microsoft.WindowsAzure.Storage.Table;
 
 namespace AzureStorageReference
 {
     class Program
     {
         static void Main(string[] args)
+        {
+            // Module 1: learn about Azure Storage Blob Examples
+            // AzureStorageBlobExamples();
+
+            // Module 2: Learn about Azure Storage Table Examples
+            AzureStorageTableExamples();
+        }
+
+
+        static void AzureStorageBlobExamples()
         {
             // Getting configuration from the App.config file and get access to the CloudStorageAccount.
             // Azure access Key should is stored in the App.config
@@ -247,6 +258,108 @@ namespace AzureStorageReference
             }
 
             return blobContainers;
+        }
+
+
+        public class TenantEntity : TableEntity
+        {
+            public TenantEntity(string lastName, string firstName, string region)
+            {
+                this.firstName = firstName;
+                this.PartitionKey = region;
+                this.RowKey = lastName;
+                this.lastName = lastName;
+            }
+
+            public TenantEntity() { }
+
+            public string firstName { get; set; }
+
+            public string lastName { get; set; }
+
+            public string Email { get; set; }
+
+            public string PhoneNumber { get; set; }
+        }
+
+        static void AzureStorageTableExamples()
+        {
+            // Getting configuration from the App.config file and get access to the CloudStorageAccount.
+            // Azure access Key should is stored in the App.config
+            String storageKeyValue = CloudConfigurationManager.GetSetting("AzureStorageAccount");
+
+            // Just in case to check whether reading the correct value
+            Console.WriteLine("Storage Account Key Used" + storageKeyValue);
+
+            CloudStorageAccount storageAccount = CloudStorageAccount.Parse(storageKeyValue);
+
+            // Create the table client.
+            CloudTableClient tableClient = storageAccount.CreateCloudTableClient();
+
+            // Retrieve a reference to the table.
+            CloudTable table = tableClient.GetTableReference("tenant");
+
+            table.CreateIfNotExists();
+
+            // Lesson 1 Table Insert
+
+            TenantEntity tenant1 = new TenantEntity("Neson", "De Jesus", "Canada");
+            tenant1.Email = "nelson.dejesus@cibc.com";
+            tenant1.PhoneNumber = "911-911-9111";
+
+            TableOperation tOper = TableOperation.Insert(tenant1);
+
+            // Lesson 2 Batch Insert
+            TableBatchOperation batchInsertOperation = new TableBatchOperation();
+
+            TenantEntity tenant2 = new TenantEntity("Vivek", "Menon", "USA");
+            tenant2.Email = "vivek.menon@cibc.com";
+            tenant2.PhoneNumber = "911-911-9111";
+
+            batchInsertOperation.Insert(tenant2);
+
+            TenantEntity tenant3 = new TenantEntity("Sanders", "John", "USA");
+            tenant3.Email = "john.sanders@hnahonda.com";
+            tenant3.PhoneNumber = "911-911-9111";
+
+            batchInsertOperation.Insert(tenant3);
+
+            table.ExecuteBatch(batchInsertOperation);
+
+            // Lession 3: Accesing the table data
+            TableQuery<TenantEntity> query = new TableQuery<TenantEntity>().Where(TableQuery.GenerateFilterCondition("PartitionKey", 
+                QueryComparisons.Equal, "USA"));
+            foreach(TenantEntity tenant in table.ExecuteQuery(query))
+            {
+                Console.WriteLine("{0}, {1}, {2}, {3}", tenant.firstName, tenant.lastName, tenant.Email, tenant.PhoneNumber);
+            }
+
+
+            // Lesson 4: Multiple condition in where clause
+            TableQuery<TenantEntity> queryMultipleWhereContidion = new TableQuery<TenantEntity>().Where(
+                TableQuery.CombineFilters(
+                    TableQuery.GenerateFilterCondition("PartitionKey", QueryComparisons.Equal, "USA"),
+                    TableOperators.And,
+                    TableQuery.GenerateFilterCondition("lastName", QueryComparisons.Equal, "Sanders")));
+
+            foreach(TenantEntity tenant in table.ExecuteQuery(queryMultipleWhereContidion))
+            {
+                Console.WriteLine("{0}, {1}, {2}, {3}", tenant.firstName, tenant.lastName, tenant.Email, tenant.PhoneNumber);
+            }
+
+
+            // Lesson 5: Single record retrieval
+            TableOperation retrieveOperation = TableOperation.Retrieve<TenantEntity>("Sanders", "John");
+            TableResult retrievedResult = table.Execute(retrieveOperation);
+            if (retrievedResult.Result != null)
+            {
+                Console.WriteLine(((TenantEntity)retrievedResult.Result).PhoneNumber);
+            }
+            else
+            {
+                Console.WriteLine("The phone number could not be retrieved.");
+            }
+            Console.ReadLine();
         }
     }
 }
